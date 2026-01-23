@@ -64,7 +64,7 @@ interface QueuedMessage {
 
 export class WebSocketServer {
   private wsServer: WebSocket.Server | null = null
-  private readonly WS_PORT = parseInt(process.env.WS_PORT || '4002')
+  private readonly WS_PORT = 4002
   // WebSocket security
   private wsConnectionKey: string | null = null
   private readonly STORAGE_DIR = path.join(os.homedir(), '.keyboard-mcp')
@@ -169,10 +169,9 @@ export class WebSocketServer {
   }
 
   private setupWebSocketServer(): void {
-    try {
-      this.wsServer = new WebSocket.Server({
-        port: this.WS_PORT,
-        host: '0.0.0.0', // Allow connections from pod network in Kubernetes
+    this.wsServer = new WebSocket.Server({
+      port: this.WS_PORT,
+      host: '127.0.0.1', // Localhost only for security
       verifyClient: (info: WebSocketVerifyInfo) => {
         try {
           // Validate connection is from localhost
@@ -220,11 +219,6 @@ export class WebSocketServer {
         }
       },
     })
-
-    this.wsServer.on('error', (error: Error) => {
-      console.error('❌ WebSocket server error:', error.message);
-      console.warn('⚠️  WebSocket service may not be available');
-    });
 
     this.wsServer.on('connection', (ws: WebSocket) => {
       console.log('✅ New WebSocket client connected')
@@ -427,11 +421,6 @@ export class WebSocketServer {
         this.cleanupConnection(ws)
       })
     })
-  } catch (error: any) {
-      console.error('❌ Failed to setup WebSocket server:', error.message);
-      console.warn('⚠️  WebSocket service will not be available');
-      this.wsServer = null;
-    }
   }
 
   // Public method to send a message to all connected clients

@@ -1,32 +1,45 @@
-FROM node:20-alpine
+# syntax = docker/dockerfile:1
 
-# Create app directory and user first
+# Adjust NODE_VERSION as desired
+ARG NODE_VERSION=20.18.0
+FROM node:${NODE_VERSION}-slim AS base
+
+LABEL fly_launch_runtime="Node.js"
+
+# Node.js app lives here
 WORKDIR /app
 
-# Use existing node user (UID 1000) from base image
-RUN chown -R node:node /app
+# Set production environment
+ENV NODE_ENV="production"
 
-# Copy package files and change ownership
-COPY --chown=node:node package*.json ./
-COPY --chown=node:node tsconfig.json ./
 
-# Switch to non-root user BEFORE installing dependencies
-USER node
+# Throw-away build stage to reduce size of final image
+FROM base AS build
 
-# Install ALL dependencies (including dev dependencies for build)
-RUN npm ci && npm cache clean --force
+# Install packages needed to build node modules
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
 
-# Copy source code
-COPY --chown=node:node src ./src
+# Install node modules
+COPY package-lock.json package.json ./
+RUN npm ci --include=dev
 
-# Build the TypeScript project
+# Copy application code
+COPY . .
+
+# Build application
 RUN npm run build
 
-# Remove dev dependencies to keep image smaller
-RUN npm ci --only=production && npm cache clean --force
+# Remove development dependencies
+RUN npm prune --omit=dev
 
-# Expose port
-EXPOSE 3000
 
-# Start the application directly (no need to build again)
-CMD ["node", "dist/src/server.js"]
+# Final stage for app image
+FROM base
+
+# Copy built application
+COPY --from=build /app /app
+
+# Start the server by default, this can be overwritten at runtime
+EXPOSE 8080
+CMD [ "npm", "run", "start" ]
